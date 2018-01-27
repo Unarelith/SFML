@@ -2155,6 +2155,8 @@ bool WindowImplX11::processEvent(XEvent& windowEvent)
                 event.mouseMotion.y = relativeValues[1];
                 pushEvent(event);
             }
+
+            XFreeEventData(m_display, &windowEvent.xcookie);
             break;
         }
     }
