@@ -362,6 +362,34 @@ namespace
         return false;
     }
 
+    bool initXInput2(::Display* disp)
+    {
+        int opcode, event, error;
+        if (!XQueryExtension(disp, "XInputExtension", &opcode, &event, &error))
+            return false;
+
+        int major = 2, minor = 0;
+        if (XIQueryVersion(disp, &major, &minor) != BadRequest)
+        {
+            XIEventMask eventMask;
+            unsigned char mask[XIMaksLen(XI_RawMotion)];
+            std::memset(mask, 0, sizeof(mask));
+
+            eventMask.deviceid = XIAllMasterDevices;
+            eventMask.mask_len = sizeof(mask);
+            eventMask.mask = mask;
+
+            XISetMask(mask, XI_RawMotion);
+
+            if (XISelectEvents(disp, DefaultRootWindow(disp), &eventMask, 1) == Success)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     sf::Keyboard::Key keysymToSF(KeySym symbol)
     {
         switch (symbol)
@@ -1597,6 +1625,10 @@ void WindowImplX11::initialize()
                         1);
     }
 
+    // Enable raw input
+    if (!initXInput2(m_display))
+        err() << "Failed to initialize xinput2" << std::endl;
+
     // Show the window
     setVisible(true);
 
@@ -2085,6 +2117,42 @@ bool WindowImplX11::processEvent(XEvent& windowEvent)
             if (!m_lastInputTime)
                 m_lastInputTime = windowEvent.xproperty.time;
 
+            break;
+        }
+
+        case GenericEvent:
+        {
+            if (XGetEventData(m_display, &windowEvent.xcookie)
+                    && windowEvent.xcookie.evtype == XI_RawMotion)
+            {
+                const XIRawEvent* rawEv;
+                rawEv = static_cast<const XIRawEvent*>(windowEvent.xcookie.data);
+
+                const int mouseAxis = 2;
+                int relativeValues[2] = { 0, 0 };
+                int limit = rawEv->valuators.mask_len;
+
+                if (limit > mouseAxis)
+                    limit = mouseAxis;
+                limit *= 8;
+
+                // Get relative input values
+                const double* inputValues = rawEv->raw_values;
+                for (int i = 0; i < limit; ++i)
+                {
+                    if (XIMaskIsSet(rawEv->valuators.mask, i))
+                    {
+                        relativeValues[i] = static_cast<int>(*inputValues);
+                        ++inputValues;
+                    }
+                }
+
+                Event event;
+                event.type = Event::MouseMotion;
+                event.mouseMotion.x = relativeValues[0];
+                event.mouseMotion.y = relativeValues[1];
+                pushEvent(event);
+            }
             break;
         }
     }
