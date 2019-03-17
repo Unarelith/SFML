@@ -418,14 +418,8 @@ void WindowImplWin32::setVisible(bool visible)
 ////////////////////////////////////////////////////////////
 void WindowImplWin32::setMouseCursorVisible(bool visible)
 {
-    // Don't call twice ShowCursor with the same parameter value;
-    // we don't want to increment/decrement the internal counter
-    // more than once.
-    if (visible != m_cursorVisible)
-    {
-        m_cursorVisible = visible;
-        ShowCursor(visible);
-    }
+    m_cursorVisible = visible;
+    SetCursor(m_cursorVisible ? m_lastCursor : NULL);
 }
 
 
@@ -441,7 +435,7 @@ void WindowImplWin32::setMouseCursorGrabbed(bool grabbed)
 void WindowImplWin32::setMouseCursor(const CursorImpl& cursor)
 {
     m_lastCursor = cursor.m_cursor;
-    SetCursor(m_lastCursor);
+    SetCursor(m_cursorVisible ? m_lastCursor : NULL);
 }
 
 
@@ -605,8 +599,9 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
         case WM_SETCURSOR:
         {
             // The mouse has moved, if the cursor is in our window we must refresh the cursor
-            if (LOWORD(lParam) == HTCLIENT)
-                SetCursor(m_lastCursor);
+            if (LOWORD(lParam) == HTCLIENT) {
+                SetCursor(m_cursorVisible ? m_lastCursor : NULL);
+            }
 
             break;
         }
